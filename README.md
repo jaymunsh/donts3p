@@ -55,6 +55,7 @@ Open donts3p and use its menu-bar icon:
 - Circled check: sleep prevention is active and recently verified.
 - Circled X: inactive, stale, degraded, or failed.
 - **Turn On / Turn Off**: change the desired state.
+- The menu shows active duration, power source, battery level, assertion health, and login-recovery status.
 - **Quit**: stop the menu-bar app.
 
 The display may turn off and the screen may lock while background work continues.

@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import IOKit.ps
 import DontSleepShared
 import Foundation
 
@@ -38,6 +39,42 @@ struct Donts3pStatusIcon: View {
                 .accessibilityLabel(state.accessibilityLabel)
         }
     }
+}
+
+private struct PowerDashboardSnapshot {
+    let source: String
+    let batteryPercentage: Int?
+}
+
+private func currentPowerDashboardSnapshot() -> PowerDashboardSnapshot {
+    guard let snapshot = IOPSCopyPowerSourcesInfo()?.takeRetainedValue(),
+          let sources = IOPSCopyPowerSourcesList(snapshot)?.takeRetainedValue() as? [CFTypeRef] else {
+        return PowerDashboardSnapshot(source: "Unknown", batteryPercentage: nil)
+    }
+
+    for source in sources {
+        guard let details = IOPSGetPowerSourceDescription(snapshot, source)?.takeUnretainedValue() as? [String: Any] else {
+            continue
+        }
+        let powerState = details[kIOPSPowerSourceStateKey] as? String
+        let currentCapacity = details[kIOPSCurrentCapacityKey] as? Int
+        let maximumCapacity = details[kIOPSMaxCapacityKey] as? Int
+        let percentage = currentCapacity.flatMap { current in
+            maximumCapacity.flatMap { maximum in maximum > 0 ? Int((Double(current) / Double(maximum) * 100).rounded()) : nil }
+        }
+        let sourceName = powerState == kIOPSACPowerValue ? "Power Adapter" : "Battery"
+        return PowerDashboardSnapshot(source: sourceName, batteryPercentage: percentage)
+    }
+
+    return PowerDashboardSnapshot(source: "Unknown", batteryPercentage: nil)
+}
+
+private func formattedDuration(since startDate: Date?, now: Date = Date()) -> String {
+    guard let startDate else { return "—" }
+    let totalMinutes = max(0, Int(now.timeIntervalSince(startDate)) / 60)
+    let hours = totalMinutes / 60
+    let minutes = totalMinutes % 60
+    return hours > 0 ? "\(hours)h \(minutes)m" : "\(minutes)m"
 }
 private func compactStatusIcon(state: Donts3pStatusIconState) -> NSImage {
     let image = NSImage(size: NSSize(width: 22, height: 18))
@@ -102,6 +139,7 @@ final class StatusBarController: NSObject, NSMenuDelegate {
     private var statusItem: NSStatusItem?
     private let menu = NSMenu()
     private var timer: Timer?
+    private var protectedSince: Date?
 
     init(model: AppModel) {
         self.model = model
@@ -129,6 +167,11 @@ final class StatusBarController: NSObject, NSMenuDelegate {
 
     private func updateButton() {
         let state = Donts3pStatusIconState(observation: model.observation)
+        if state == .active {
+            protectedSince = protectedSince ?? Date()
+        } else {
+            protectedSince = nil
+        }
         statusItem?.button?.title = ""
         statusItem?.button?.image = compactStatusIcon(state: state)
         statusItem?.button?.imagePosition = .imageOnly
@@ -142,15 +185,23 @@ final class StatusBarController: NSObject, NSMenuDelegate {
         title.isEnabled = false
         menu.addItem(title)
 
-        let status = NSMenuItem(
-            title: model.isProtected ? "Sleep prevention active" : "Sleep prevention inactive",
-            action: nil,
-            keyEquivalent: ""
-        )
-        status.isEnabled = false
-        menu.addItem(status)
+        let isProtected = model.isProtected
+        let power = currentPowerDashboardSnapshot()
+        let dashboardLines = [
+            isProtected ? "● Sleep prevention active" : "● Sleep prevention inactive",
+            "  Active for: \(isProtected ? formattedDuration(since: protectedSince) : "—")",
+            "  Power: \(power.source)",
+            "  Battery: \(power.batteryPercentage.map { "\($0)%" } ?? "Unknown")",
+            "  Assertion: \(isProtected ? "Healthy" : "Inactive")",
+            "  Login recovery: \(model.desiredActive ? "Enabled" : "Off")",
+        ]
+        for line in dashboardLines {
+            let item = NSMenuItem(title: line, action: nil, keyEquivalent: "")
+            item.isEnabled = false
+            menu.addItem(item)
+        }
 
-        let lid = NSMenuItem(title: "Closed-lid sleep prevention is unavailable.", action: nil, keyEquivalent: "")
+        let lid = NSMenuItem(title: "  Closed-lid prevention: Unavailable", action: nil, keyEquivalent: "")
         lid.isEnabled = false
         menu.addItem(lid)
 
