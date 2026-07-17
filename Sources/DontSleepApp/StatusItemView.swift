@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import Combine
 import IOKit.ps
 import DontSleepShared
 import Foundation
@@ -31,13 +32,10 @@ struct Donts3pStatusIcon: View {
     let observation: AssertionObservation
 
     var body: some View {
-        TimelineView(.periodic(from: .now, by: 1)) { context in
-            let state = Donts3pStatusIconState(observation: observation, now: context.date)
-
-            Text(state == .active ? "Z³✓⃝" : "Z³×⃝")
-                .font(.system(size: 15, weight: .semibold, design: .rounded))
-                .accessibilityLabel(state.accessibilityLabel)
-        }
+        let state = Donts3pStatusIconState(observation: observation)
+        Text(state == .active ? "Z³✓⃝" : "Z³×⃝")
+            .font(.system(size: 15, weight: .semibold, design: .rounded))
+            .accessibilityLabel(state.accessibilityLabel)
     }
 }
 
@@ -138,8 +136,10 @@ final class StatusBarController: NSObject, NSMenuDelegate {
     private let model: AppModel
     private var statusItem: NSStatusItem?
     private let menu = NSMenu()
-    private var timer: Timer?
+    private var observationCancellable: AnyCancellable?
     private var protectedSince: Date?
+    private lazy var activeStatusIcon = compactStatusIcon(state: .active)
+    private lazy var inactiveStatusIcon = compactStatusIcon(state: .inactive)
 
     init(model: AppModel) {
         self.model = model
@@ -156,13 +156,14 @@ final class StatusBarController: NSObject, NSMenuDelegate {
         menu.delegate = self
         item.menu = menu
         updateButton()
-        timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.updateButton() }
-        }
+        observationCancellable = model.$observation
+            .removeDuplicates()
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in self?.updateButton() }
     }
 
     deinit {
-        timer?.invalidate()
+        observationCancellable?.cancel()
     }
 
     private func updateButton() {
@@ -173,7 +174,7 @@ final class StatusBarController: NSObject, NSMenuDelegate {
             protectedSince = nil
         }
         statusItem?.button?.title = ""
-        statusItem?.button?.image = compactStatusIcon(state: state)
+        statusItem?.button?.image = state == .active ? activeStatusIcon : inactiveStatusIcon
         statusItem?.button?.imagePosition = .imageOnly
         statusItem?.button?.toolTip = state.accessibilityLabel
     }
