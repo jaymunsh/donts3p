@@ -23,7 +23,8 @@ donts3p prevents **user-idle system sleep** so terminals, local servers, downloa
 - One-click sleep-prevention toggle
 - Display sleep and screen lock remain available
 - Recovers the enabled state after login or an unexpected app exit
-- No global power-setting changes and no privileged helper
+- Default mode makes no global power-setting changes and uses no privileged helper
+- Optional **Labs** override for advanced users who explicitly authorize a persistent system-wide sleep setting
 
 ## Installation
 
@@ -60,6 +61,27 @@ Open donts3p and use its menu-bar icon:
 
 The display may turn off and the screen may lock while background work continues.
 
+### Labs: system sleep override
+
+The optional Labs action applies macOS `pmset disablesleep` after an explicit warning and administrator authentication. It is **off by default**, requires AC power to enable, and is independent from normal sleep prevention.
+
+Before changing anything, donts3p stores the exact Battery, AC, and optional UPS values. **Restore system sleep setting** restores and verifies those values. The app never receives or stores your administrator password.
+
+This experimental override:
+
+- persists after donts3p exits;
+- may increase heat and energy use;
+- does not guarantee that a MacBook will stay awake with its lid closed;
+- must not be used in a bag or other poorly ventilated space.
+
+If the app cannot restore the setting, keep its Application Support state and run:
+
+```sh
+Scripts/restore-system-sleep.sh
+```
+
+That script is an emergency fallback which enables normal system sleep for all profiles; it does not reproduce custom per-profile values. The uninstall script refuses to remove donts3p state while an exact-restore snapshot remains.
+
 ## How it works
 
 donts3p holds a macOS power-management assertion that blocks user-idle system sleep. An unprivileged per-user recovery supervisor restores an enabled session after login or an unexpected app exit without owning assertions or changing system-wide settings.
@@ -67,6 +89,8 @@ donts3p holds a macOS power-management assertion that blocks user-idle system sl
 ## Important limitation
 
 **Closed-lid operation is not supported.** Closing a MacBook lid can still put the machine to sleep. Keep the lid open, or use a macOS-supported clamshell setup with the required external display, power, and input devices.
+
+For supported closed-lid use, follow Apple's clamshell requirements: connect power, an external display, and an external keyboard and pointing device. Labs does not replace those platform requirements.
 
 The app also cannot prevent shutdown, restart, updates, thermal protection, or battery exhaustion.
 

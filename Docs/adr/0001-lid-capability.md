@@ -1,7 +1,7 @@
 # ADR 0001: Closed-Lid Capability Evidence
 
-- **Status:** Proposed — fail closed
-- **Decision:** The shipped baseline has no closed-lid support and makes no global power-setting change.
+- **Status:** Accepted for baseline; Labs experiment governed by ADR 0004
+- **Decision:** The supported baseline has no closed-lid guarantee and makes no global power-setting change. The separately disclosed Labs override remains experimental.
 
 ## Gate
 

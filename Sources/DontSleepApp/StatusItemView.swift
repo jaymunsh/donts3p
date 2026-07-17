@@ -217,6 +217,37 @@ final class StatusBarController: NSObject, NSMenuDelegate {
         }
 
         menu.addItem(.separator())
+        let labsStateLabel: String
+        if model.hasPendingSystemSleepOverrideRestore {
+            labsStateLabel = "Restore pending"
+        } else {
+            switch model.systemSleepOverrideObservedState {
+            case .off: labsStateLabel = "Off"
+            case .enabled: labsStateLabel = "Enabled externally"
+            case .mixed: labsStateLabel = "Mixed"
+            case .unknown: labsStateLabel = "Unknown"
+            }
+        }
+        let labsStatus = NSMenuItem(
+            title: "Labs: System sleep override \(labsStateLabel)",
+            action: nil,
+            keyEquivalent: ""
+        )
+        labsStatus.isEnabled = false
+        menu.addItem(labsStatus)
+        if let diagnostic = model.systemSleepOverrideDiagnostic {
+            let labsDiagnostic = NSMenuItem(title: "  \(diagnostic)", action: nil, keyEquivalent: "")
+            labsDiagnostic.isEnabled = false
+            menu.addItem(labsDiagnostic)
+        }
+        let labsAction = NSMenuItem(
+            title: model.hasPendingSystemSleepOverrideRestore ? "Restore system sleep setting" : "Enable system sleep override…",
+            action: model.hasPendingSystemSleepOverrideRestore ? #selector(restoreSystemSleepOverride) : #selector(requestSystemSleepOverrideEnable),
+            keyEquivalent: ""
+        )
+        labsAction.target = self
+        menu.addItem(labsAction)
+
 
         let toggle = NSMenuItem(
             title: model.desiredActive ? "Turn Off" : "Turn On",
@@ -234,6 +265,24 @@ final class StatusBarController: NSObject, NSMenuDelegate {
     @objc private func toggleProtection() {
         model.desiredActive ? model.disable() : model.enableAndActivate()
         updateButton()
+    }
+
+    @objc private func requestSystemSleepOverrideEnable() {
+        model.requestSystemSleepOverrideEnable()
+        let alert = NSAlert()
+        alert.messageText = "Enable experimental system sleep override?"
+        alert.informativeText = "This changes a persistent system-wide setting. It may not guarantee closed-lid operation and can increase heat or battery drain. AC power is required. Ensure ventilation and never use this while the Mac is in a bag."
+        alert.addButton(withTitle: "Enable")
+        alert.addButton(withTitle: "Cancel")
+        if alert.runModal() == .alertFirstButtonReturn {
+            model.confirmSystemSleepOverrideEnable()
+        } else {
+            model.cancelSystemSleepOverrideEnable()
+        }
+    }
+
+    @objc private func restoreSystemSleepOverride() {
+        model.restoreSystemSleepOverride()
     }
 
     @objc private func quitApplication() {
@@ -255,9 +304,36 @@ struct StatusItemView: View {
             Text(diagnostic)
         }
         Divider()
+        Text("Labs: System sleep override \(labsStateLabel)")
+        Text("May not prevent closed-lid sleep.")
+        if let diagnostic = model.systemSleepOverrideDiagnostic {
+            Text(diagnostic)
+        }
+        Button(model.hasPendingSystemSleepOverrideRestore ? "Restore system sleep setting" : "Enable system sleep override") {
+            if model.hasPendingSystemSleepOverrideRestore {
+                model.restoreSystemSleepOverride()
+            } else {
+                model.requestSystemSleepOverrideEnable()
+            }
+        }
+        if model.isSystemSleepOverrideWarningVisible {
+            Text("Changes a persistent system-wide setting; AC power is required and heat or battery drain may increase. Ensure ventilation and never use this while the Mac is in a bag.")
+            Button("Confirm experimental override") { model.confirmSystemSleepOverrideEnable() }
+            Button("Cancel") { model.cancelSystemSleepOverrideEnable() }
+        }
         Button(model.desiredActive ? "Turn Off" : "Turn On") {
             model.desiredActive ? model.disable() : model.enableAndActivate()
         }
         Button("Quit") { model.quit() }
+    }
+
+    private var labsStateLabel: String {
+        if model.hasPendingSystemSleepOverrideRestore { return "Restore pending" }
+        switch model.systemSleepOverrideObservedState {
+        case .off: return "Off"
+        case .enabled: return "Enabled externally"
+        case .mixed: return "Mixed"
+        case .unknown: return "Unknown"
+        }
     }
 }

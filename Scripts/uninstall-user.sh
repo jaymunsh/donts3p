@@ -11,6 +11,7 @@ legacy_run_lock="$legacy_state_dir/run.lock"
 activation_socket="$state_dir/activate.sock"
 legacy_activation_socket="$legacy_state_dir/activate.sock"
 
+system_sleep_override_snapshot="$state_dir/system-sleep-override.json"
 hold_run_locks() {
     /usr/bin/python3 - "$run_lock" "$legacy_run_lock" "$0" "$@" <<'PY'
 import fcntl
@@ -81,6 +82,11 @@ if [[ "$current_socket_status" -gt 1 || "$legacy_socket_status" -gt 1 ]]; then
 fi
 if [[ "$current_socket_status" -eq 0 || "$legacy_socket_status" -eq 0 ]]; then
     printf 'donts3p or legacy application GUI activation socket is active; quit it before uninstalling.\n' >&2
+    exit 1
+fi
+if [[ -f "$system_sleep_override_snapshot" ]]; then
+    printf 'A donts3p Labs system-sleep override is still recorded. Restore it from the app before uninstalling.\n' >&2
+    printf 'Emergency fallback: sudo /usr/bin/pmset -a disablesleep 0\n' >&2
     exit 1
 fi
 

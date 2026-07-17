@@ -1,7 +1,7 @@
 # ADR 0002: Ad-Hoc Privileged Boundary
 
-- **Status:** Proposed — fail closed
-- **Decision:** No privileged helper, IPC schema, daemon, installer, or experimental release exists until this ADR is complete and ADR 0003 is separately approved.
+- **Status:** Superseded for the one-shot Labs path by ADR 0004
+- **Decision:** No persistent privileged helper or daemon is shipped. ADR 0004 permits only a fixed, administrator-authorized one-shot `pmset` operation with exact restoration.
 
 ## Required decision record
 

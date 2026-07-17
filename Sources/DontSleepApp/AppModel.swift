@@ -17,12 +17,18 @@ final class AppModel: ObservableObject {
     @Published private(set) var isBatteryWarningVisible = false
     @Published private(set) var terminalOffDiagnostic: String?
     @Published private(set) var observation: AssertionObservation
+    @Published private(set) var isSystemSleepOverrideWarningVisible = false
+    @Published private(set) var isSystemSleepOverrideEnabled = false
+    @Published private(set) var hasPendingSystemSleepOverrideRestore = false
+    @Published private(set) var systemSleepOverrideObservedState: SystemSleepOverrideObservedState = .unknown
+    @Published private(set) var systemSleepOverrideDiagnostic: String?
 
     let controller: SleepAssertionController
     private let intentStore: IntentStoring
     private let recoveryManager: RecoveryManaging
     private let powerSourceMonitor: PowerSourceMonitor
     private let terminator: ProcessTerminating
+    private let systemSleepOverrideController: SystemSleepOverrideControlling
     private var releaseRetryIndex = 0
     private var createRetryIndex = 0
     private var createRetryTimer: Timer?
@@ -32,13 +38,18 @@ final class AppModel: ObservableObject {
     private var pendingTermination = false
     private var hasTerminated = false
 
-    init(controller: SleepAssertionController = SleepAssertionController(), intentStore: IntentStoring = IntentStore(), recoveryManager: RecoveryManaging = RecoveryManager(), powerSourceMonitor: PowerSourceMonitor = PowerSourceMonitor(), terminator: ProcessTerminating = ApplicationTerminator()) {
+    init(controller: SleepAssertionController = SleepAssertionController(), intentStore: IntentStoring = IntentStore(), recoveryManager: RecoveryManaging = RecoveryManager(), powerSourceMonitor: PowerSourceMonitor = PowerSourceMonitor(), systemSleepOverrideController: SystemSleepOverrideControlling = SystemSleepOverrideController(), terminator: ProcessTerminating = ApplicationTerminator()) {
         self.controller = controller
         self.intentStore = intentStore
         self.recoveryManager = recoveryManager
         self.powerSourceMonitor = powerSourceMonitor
+        self.systemSleepOverrideController = systemSleepOverrideController
         self.terminator = terminator
         self.observation = controller.observation
+        self.isSystemSleepOverrideEnabled = systemSleepOverrideController.isEnabled
+        self.systemSleepOverrideDiagnostic = systemSleepOverrideController.diagnostic
+        self.hasPendingSystemSleepOverrideRestore = systemSleepOverrideController.hasPendingRestore
+        self.systemSleepOverrideObservedState = systemSleepOverrideController.observedState
     }
 
     deinit {
@@ -131,6 +142,43 @@ final class AppModel: ObservableObject {
         pendingTermination = true
         disable()
         terminateWhenClean()
+    }
+
+    func requestSystemSleepOverrideEnable() {
+        isSystemSleepOverrideWarningVisible = true
+    }
+
+    func cancelSystemSleepOverrideEnable() {
+        isSystemSleepOverrideWarningVisible = false
+    }
+
+    func confirmSystemSleepOverrideEnable() {
+        isSystemSleepOverrideWarningVisible = false
+        do {
+            try systemSleepOverrideController.enable()
+            refreshSystemSleepOverride()
+        } catch {
+            refreshSystemSleepOverride()
+            systemSleepOverrideDiagnostic = error.localizedDescription
+        }
+    }
+
+    func restoreSystemSleepOverride() {
+        do {
+            try systemSleepOverrideController.restore()
+            refreshSystemSleepOverride()
+        } catch {
+            refreshSystemSleepOverride()
+            systemSleepOverrideDiagnostic = error.localizedDescription
+        }
+    }
+
+    private func refreshSystemSleepOverride() {
+        systemSleepOverrideController.refresh()
+        isSystemSleepOverrideEnabled = systemSleepOverrideController.isEnabled
+        hasPendingSystemSleepOverrideRestore = systemSleepOverrideController.hasPendingRestore
+        systemSleepOverrideObservedState = systemSleepOverrideController.observedState
+        systemSleepOverrideDiagnostic = systemSleepOverrideController.diagnostic
     }
 
     func retryPendingRelease() {
